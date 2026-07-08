@@ -1,9 +1,11 @@
-console.log("🔥 GRX CATALOG V2 CACHE MASIVO 🔥", __filename);
+console.log("🔥 GRX CATALOG V2.7 FIX CAMISA 🔥", __filename);
 
 const express = require("express");
 const axios = require("axios");
 
 const router = express.Router();
+
+const ROBLOX_CATALOG_URL = "https://catalog.roblox.com/v2/search/items/details";
 
 const PAGE_SIZE_DEFAULT = 60;
 const PAGE_SIZE_MIN = 20;
@@ -11,6 +13,7 @@ const PAGE_SIZE_MAX = 80;
 
 const MAX_CACHE_ITEMS_PER_KEY = 5000;
 const KEYWORDS_PER_EXPAND = 6;
+const MAX_EXPANDS_PER_REQUEST = 6;
 
 const catalogCache = new Map();
 
@@ -20,7 +23,6 @@ const categoryKeywords = {
         "black hair ugc",
         "emo hair ugc",
         "messy hair ugc",
-        "fluffy hair ugc",
         "mask ugc",
         "cyber mask ugc",
         "oni mask ugc",
@@ -30,7 +32,9 @@ const categoryKeywords = {
         "chain necklace ugc",
         "glasses ugc",
         "sunglasses ugc",
-        "hoodie layered clothing",
+        "hoodie roblox",
+        "shirt roblox",
+        "pants roblox",
         "streetwear ugc",
         "shoulder pet ugc",
         "tail waist ugc",
@@ -42,6 +46,7 @@ const categoryKeywords = {
         "dark avatar ugc",
         "cute avatar ugc"
     ],
+
     "Cabeza": [
         "ugc hat",
         "ugc crown",
@@ -59,6 +64,7 @@ const categoryKeywords = {
         "angel halo",
         "headphones ugc"
     ],
+
     "Cabello": [
         "black hair ugc",
         "messy hair ugc",
@@ -81,6 +87,7 @@ const categoryKeywords = {
         "mullet hair ugc",
         "wolfcut hair ugc"
     ],
+
     "Cara": [
         "face accessory ugc",
         "cute face accessory",
@@ -94,6 +101,7 @@ const categoryKeywords = {
         "anime face accessory",
         "kawaii face accessory"
     ],
+
     "Lentes": [
         "glasses ugc",
         "sunglasses ugc",
@@ -106,6 +114,7 @@ const categoryKeywords = {
         "black glasses ugc",
         "cyber glasses ugc"
     ],
+
     "Máscaras": [
         "mask ugc",
         "black mask ugc",
@@ -120,6 +129,7 @@ const categoryKeywords = {
         "cute mask ugc",
         "ninja mask ugc"
     ],
+
     "Cuello": [
         "chain necklace ugc",
         "necklace ugc",
@@ -134,6 +144,7 @@ const categoryKeywords = {
         "silver chain ugc",
         "gold chain ugc"
     ],
+
     "Espalda": [
         "sword back ugc",
         "katana back ugc",
@@ -150,6 +161,7 @@ const categoryKeywords = {
         "guitar back ugc",
         "cute backpack ugc"
     ],
+
     "Hombros": [
         "shoulder pet ugc",
         "shoulder plush ugc",
@@ -162,6 +174,7 @@ const categoryKeywords = {
         "shoulder monster ugc",
         "anime shoulder ugc"
     ],
+
     "Cintura": [
         "tail waist ugc",
         "belt ugc",
@@ -174,32 +187,50 @@ const categoryKeywords = {
         "sword waist ugc",
         "waist bag ugc"
     ],
+
     "Camisa": [
+        "shirt roblox",
+        "black shirt roblox",
+        "t shirt roblox",
+        "t-shirt roblox",
+        "tee roblox",
+        "hoodie roblox",
+        "black hoodie roblox",
+        "jacket roblox",
+        "sweater roblox",
+        "vest roblox",
+        "top roblox",
+        "streetwear shirt roblox",
+        "y2k shirt roblox",
+        "emo shirt roblox",
+        "goth shirt roblox",
+        "anime shirt roblox",
+        "oversized hoodie roblox",
+        "shirt layered clothing",
         "hoodie layered clothing",
         "jacket layered clothing",
-        "shirt layered clothing",
-        "sweater layered clothing",
-        "streetwear layered clothing",
-        "y2k hoodie roblox",
-        "black hoodie roblox",
-        "emo hoodie roblox",
-        "goth hoodie roblox",
-        "anime hoodie roblox",
-        "zip hoodie roblox",
-        "oversized hoodie roblox"
+        "sweater layered clothing"
     ],
+
     "Pantalón": [
-        "pants layered clothing",
-        "jeans layered clothing",
-        "cargos layered clothing",
-        "shorts layered clothing",
+        "pants roblox",
+        "black pants roblox",
+        "jeans roblox",
+        "cargos roblox",
+        "shorts roblox",
+        "trousers roblox",
+        "joggers roblox",
+        "skirt roblox",
         "streetwear pants roblox",
         "y2k pants roblox",
-        "black pants roblox",
         "emo pants roblox",
         "goth pants roblox",
         "baggy pants roblox",
-        "ripped jeans roblox"
+        "ripped jeans roblox",
+        "pants layered clothing",
+        "jeans layered clothing",
+        "cargos layered clothing",
+        "shorts layered clothing"
     ]
 };
 
@@ -250,6 +281,20 @@ const supportedCategories = [
     "Pantalón"
 ];
 
+const categoryAssetTypeIds = {
+    "Cabeza": [8],
+    "Cabello": [41],
+    "Cara": [42],
+    "Lentes": [42],
+    "Máscaras": [42],
+    "Cuello": [43, 45],
+    "Espalda": [46],
+    "Hombros": [44],
+    "Cintura": [47],
+    "Camisa": [2, 11, 64, 65, 67, 68],
+    "Pantalón": [12, 66, 69, 72]
+};
+
 const animationBundles = [
     { bundleId: 427999, name: "adidas Sports Animation Pack", price: 250, creator: "Roblox" },
     { bundleId: 2623795, name: "adidas Community Animation Pack", price: "Gratis", creator: "Roblox" },
@@ -283,8 +328,6 @@ const assetTypeCategory = {
 
     66: "Pantalón",
     69: "Pantalón",
-    70: "Pantalón",
-    71: "Pantalón",
     72: "Pantalón",
 
     2: "Camisa",
@@ -296,7 +339,10 @@ const assetTypeCategory = {
     28: "Cuerpo",
     29: "Cuerpo",
     30: "Cuerpo",
-    31: "Cuerpo"
+    31: "Cuerpo",
+
+    70: "Cuerpo",
+    71: "Cuerpo"
 };
 
 function sanitizeText(value, maxLength = 70) {
@@ -316,6 +362,21 @@ function sanitizeText(value, maxLength = 70) {
     return text || "Sin nombre";
 }
 
+function sanitizeQuery(value, maxLength = 60) {
+    let text = String(value || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7E]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (text.length > maxLength) {
+        text = text.slice(0, maxLength).trim();
+    }
+
+    return text;
+}
+
 function getAssetTypeId(item) {
     if (typeof item.assetType === "number") return item.assetType;
     if (typeof item.assetTypeId === "number") return item.assetTypeId;
@@ -325,8 +386,24 @@ function getAssetTypeId(item) {
     return Number.isNaN(parsed) ? null : parsed;
 }
 
+function getAssetTypeIdsForCategory(category) {
+    if (!category || category === "Todos" || category === "Animaciones") {
+        return [];
+    }
+
+    return categoryAssetTypeIds[category] || [];
+}
+
+function itemMatchesRequestedCategory(item, requestedCategory) {
+    if (!requestedCategory || requestedCategory === "Todos") {
+        return true;
+    }
+
+    return item.category === requestedCategory;
+}
+
 function getCategoryFromName(name) {
-    const text = (name || "").toLowerCase();
+    const text = String(name || "").toLowerCase();
 
     if (
         text.includes("[bundle]") ||
@@ -338,21 +415,6 @@ function getCategoryFromName(name) {
         text.includes("leg")
     ) {
         return "Cuerpo";
-    }
-
-    if (
-        text.includes("hair") ||
-        text.includes("hairstyle") ||
-        text.includes("bangs") ||
-        text.includes("ponytail") ||
-        text.includes("pigtail") ||
-        text.includes("twin tail") ||
-        text.includes("twintail") ||
-        text.includes("bob") ||
-        text.includes("mullet") ||
-        text.includes("wolfcut")
-    ) {
-        return "Cabello";
     }
 
     if (
@@ -369,9 +431,25 @@ function getCategoryFromName(name) {
         text.includes("mask") ||
         text.includes("gas mask") ||
         text.includes("oni") ||
-        text.includes("cyber mask")
+        text.includes("cyber mask") ||
+        text.includes("skull mask")
     ) {
         return "Máscaras";
+    }
+
+    if (
+        text.includes("hair") ||
+        text.includes("hairstyle") ||
+        text.includes("bangs") ||
+        text.includes("ponytail") ||
+        text.includes("pigtail") ||
+        text.includes("twin tail") ||
+        text.includes("twintail") ||
+        text.includes("bob") ||
+        text.includes("mullet") ||
+        text.includes("wolfcut")
+    ) {
+        return "Cabello";
     }
 
     if (
@@ -417,9 +495,13 @@ function getCategoryFromName(name) {
 
     if (
         text.includes("shirt") ||
+        text.includes("t-shirt") ||
+        text.includes("t shirt") ||
+        text.includes("tee") ||
         text.includes("hoodie") ||
         text.includes("jacket") ||
         text.includes("sweater") ||
+        text.includes("vest") ||
         text.includes("top")
     ) {
         return "Camisa";
@@ -429,7 +511,13 @@ function getCategoryFromName(name) {
         text.includes("pants") ||
         text.includes("jeans") ||
         text.includes("cargos") ||
-        text.includes("shorts")
+        text.includes("shorts") ||
+        text.includes("trousers") ||
+        text.includes("joggers") ||
+        text.includes("skirt") ||
+        text.includes("stockings") ||
+        text.includes("socks") ||
+        text.includes("bottom")
     ) {
         return "Pantalón";
     }
@@ -467,16 +555,66 @@ function getCategoryFromItem(item) {
         return "Cuerpo";
     }
 
+    const assetTypeId = getAssetTypeId(item);
     const nameCategory = getCategoryFromName(item.name);
 
-    if (nameCategory !== "Todos") {
+    if (nameCategory === "Camisa" || nameCategory === "Pantalón") {
         return nameCategory;
     }
 
-    const assetTypeId = getAssetTypeId(item);
+    if (
+        assetTypeId === 8 ||
+        assetTypeId === 41 ||
+        assetTypeId === 43 ||
+        assetTypeId === 44 ||
+        assetTypeId === 46 ||
+        assetTypeId === 47
+    ) {
+        return assetTypeCategory[assetTypeId] || "Todos";
+    }
+
+    if (
+        assetTypeId === 2 ||
+        assetTypeId === 11 ||
+        assetTypeId === 64 ||
+        assetTypeId === 65 ||
+        assetTypeId === 67 ||
+        assetTypeId === 68
+    ) {
+        return "Camisa";
+    }
+
+    if (
+        assetTypeId === 12 ||
+        assetTypeId === 66 ||
+        assetTypeId === 69 ||
+        assetTypeId === 72
+    ) {
+        return "Pantalón";
+    }
+
+    if (assetTypeId === 42) {
+        if (nameCategory === "Lentes" || nameCategory === "Máscaras" || nameCategory === "Cara") {
+            return nameCategory;
+        }
+
+        return "Cara";
+    }
+
+    if (assetTypeId === 45) {
+        if (nameCategory !== "Todos") {
+            return nameCategory;
+        }
+
+        return "Cuello";
+    }
 
     if (assetTypeId && assetTypeCategory[assetTypeId]) {
         return assetTypeCategory[assetTypeId];
+    }
+
+    if (nameCategory !== "Todos") {
+        return nameCategory;
     }
 
     return "Todos";
@@ -485,11 +623,13 @@ function getCategoryFromItem(item) {
 function getPrice(item) {
     if (item.price !== undefined && item.price !== null) return item.price;
     if (item.lowestPrice !== undefined && item.lowestPrice !== null) return item.lowestPrice;
+    if (item.priceStatus !== undefined && item.priceStatus !== null) return item.priceStatus;
+
     return "Gratis";
 }
 
 function normalizeItem(item) {
-    const id = item.id;
+    const id = item.id || item.assetId;
     const assetTypeId = getAssetTypeId(item);
     const category = getCategoryFromItem(item);
 
@@ -537,16 +677,50 @@ function shuffleItems(items) {
     return copy;
 }
 
-async function searchRobloxCatalog(keyword, limit = 30) {
+function removeDuplicateKeywords(keywords) {
+    const used = new Set();
+    const clean = [];
+
+    for (const keyword of keywords) {
+        const text = sanitizeText(keyword, 90).toLowerCase();
+
+        if (!used.has(text)) {
+            used.add(text);
+            clean.push(text);
+        }
+    }
+
+    return clean;
+}
+
+async function searchRobloxCatalog(keyword, limit = 30, category = "Todos") {
     try {
-        const response = await axios.get("https://catalog.roblox.com/v2/search/items/details", {
-            params: {
-                keyword,
-                limit,
-                categoryFilter: "CommunityCreations",
-                sortType: 3
-            },
-            timeout: 9000
+        const shouldUseAssetTypes =
+            category !== "Camisa" &&
+            category !== "Pantalón";
+
+        const assetTypeIds = shouldUseAssetTypes
+            ? getAssetTypeIdsForCategory(category)
+            : [];
+
+        const params = {
+            keyword,
+            limit,
+            categoryFilter: "CommunityCreations",
+            sortType: 3
+        };
+
+        if (assetTypeIds.length > 0) {
+            params.AssetTypeIds = assetTypeIds.join(",");
+            params.assetTypeIds = assetTypeIds.join(",");
+        }
+
+        const response = await axios.get(ROBLOX_CATALOG_URL, {
+            params,
+            timeout: 9000,
+            headers: {
+                "User-Agent": "GRX-Catalog/1.0"
+            }
         });
 
         return response.data?.data || [];
@@ -566,22 +740,24 @@ function getAllKeywordCombinations(query, category) {
         keywords.push(`${q} ugc`);
         keywords.push(`${q} roblox`);
 
-        for (const modifier of modifiers) {
-            keywords.push(`${q} ${modifier}`);
-            keywords.push(`${modifier} ${q}`);
-        }
-
         const categoryBase = categoryKeywords[category] || [];
 
         for (const base of categoryBase) {
             keywords.push(`${q} ${base}`);
+        }
+
+        for (const modifier of modifiers) {
+            keywords.push(`${q} ${modifier}`);
+            keywords.push(`${modifier} ${q}`);
         }
     } else {
         const baseList = categoryKeywords[category] || categoryKeywords["Todos"];
 
         for (const base of baseList) {
             keywords.push(base);
+        }
 
+        for (const base of baseList) {
             for (const modifier of modifiers) {
                 keywords.push(`${base} ${modifier}`);
                 keywords.push(`${modifier} ${base}`);
@@ -592,29 +768,17 @@ function getAllKeywordCombinations(query, category) {
     return removeDuplicateKeywords(keywords);
 }
 
-function removeDuplicateKeywords(keywords) {
-    const used = new Set();
-    const clean = [];
-
-    for (const keyword of keywords) {
-        const text = sanitizeText(keyword, 90).toLowerCase();
-
-        if (!used.has(text)) {
-            used.add(text);
-            clean.push(text);
-        }
-    }
-
-    return clean;
-}
-
 function getCacheKey(query, category) {
-    const cleanQuery = sanitizeText(query || "", 50).toLowerCase();
+    const cleanQuery = sanitizeQuery(query || "", 50).toLowerCase() || "sin_busqueda";
     return `${category}::${cleanQuery}`;
 }
 
-function getOrCreateCache(query, category) {
+function getOrCreateCache(query, category, forceRefresh = false) {
     const key = getCacheKey(query, category);
+
+    if (forceRefresh && catalogCache.has(key)) {
+        catalogCache.delete(key);
+    }
 
     if (!catalogCache.has(key)) {
         catalogCache.set(key, {
@@ -637,7 +801,7 @@ function getOrCreateCache(query, category) {
 
 function addItemsToCache(cache, rawItems) {
     const normalized = rawItems
-        .filter(item => item && item.id && item.name)
+        .filter(item => item && (item.id || item.assetId) && item.name)
         .map(item => normalizeItem(item))
         .filter(item => item.category !== "Cuerpo")
         .filter(item => isSupportedCatalogItem(item));
@@ -648,7 +812,7 @@ function addItemsToCache(cache, rawItems) {
         if (cache.items.length >= MAX_CACHE_ITEMS_PER_KEY) break;
         if (cache.usedIds.has(item.id)) continue;
 
-        if (cache.category !== "Todos" && item.category !== cache.category) {
+        if (!itemMatchesRequestedCategory(item, cache.category)) {
             continue;
         }
 
@@ -663,13 +827,8 @@ function addItemsToCache(cache, rawItems) {
 }
 
 async function expandCache(cache, reason = "normal") {
-    if (cache.isExpanding) {
-        return;
-    }
-
-    if (cache.exhausted) {
-        return;
-    }
+    if (cache.isExpanding) return;
+    if (cache.exhausted) return;
 
     if (cache.items.length >= MAX_CACHE_ITEMS_PER_KEY) {
         cache.exhausted = true;
@@ -700,7 +859,7 @@ async function expandCache(cache, reason = "normal") {
         console.log("Keywords:", selectedKeywords.join(" | "));
 
         const searches = await Promise.allSettled(
-            selectedKeywords.map(keyword => searchRobloxCatalog(keyword, 30))
+            selectedKeywords.map(keyword => searchRobloxCatalog(keyword, 30, cache.category))
         );
 
         let rawItems = [];
@@ -729,13 +888,27 @@ async function waitForCacheNotExpanding(cache, maxMs = 3500) {
 
 async function ensureCacheHasPage(cache, page, pageSize) {
     const needed = page * pageSize;
+    let expands = 0;
 
-    if (cache.items.length >= needed) {
-        return;
+    while (
+        cache.items.length < needed &&
+        !cache.exhausted &&
+        expands < MAX_EXPANDS_PER_REQUEST
+    ) {
+        await expandCache(cache, "page-needed");
+        await waitForCacheNotExpanding(cache, 3500);
+
+        expands++;
+
+        if (cache.items.length >= needed) {
+            break;
+        }
+
+        if (cache.keywordIndex >= cache.keywords.length) {
+            cache.exhausted = true;
+            break;
+        }
     }
-
-    await expandCache(cache, "page-needed");
-    await waitForCacheNotExpanding(cache, 3500);
 
     if (cache.items.length < needed && !cache.exhausted) {
         expandCache(cache, "background-more");
@@ -750,7 +923,7 @@ function getPageFromCache(cache, page, pageSize) {
 }
 
 function detectAnimationName(name) {
-    const text = (name || "").toLowerCase();
+    const text = String(name || "").toLowerCase();
 
     if (text.includes("idle")) return "idle";
     if (text.includes("walk")) return "walk";
@@ -821,7 +994,9 @@ async function warmUpCache() {
         "Espalda",
         "Cuello",
         "Lentes",
-        "Cabeza"
+        "Cabeza",
+        "Camisa",
+        "Pantalón"
     ];
 
     console.log("🔥 Precargando cache GRX en segundo plano...");
@@ -830,15 +1005,26 @@ async function warmUpCache() {
         const cache = getOrCreateCache("", category);
         expandCache(cache, "startup-warmup");
 
-        await new Promise(resolve => setTimeout(resolve, 700));
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 }
 
+router.get("/", (req, res) => {
+    res.json({
+        name: "GRX Catalog Route",
+        version: "2.7",
+        status: "Online",
+        route: "/catalog/search"
+    });
+});
+
 router.get("/search", async (req, res) => {
     try {
-        const query = (req.query.q || "").trim();
+        const query = sanitizeQuery(req.query.q || "", 60);
         const category = req.query.category || "Todos";
         const page = Math.max(1, Number(req.query.page) || 1);
+        const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
+
         const pageSize = Math.min(
             Math.max(Number(req.query.pageSize) || PAGE_SIZE_DEFAULT, PAGE_SIZE_MIN),
             PAGE_SIZE_MAX
@@ -849,8 +1035,8 @@ router.get("/search", async (req, res) => {
 
             return res.json({
                 success: true,
-                debugVersion: "GRX_V2_CACHE_ANIMATIONS",
-                search: sanitizeText(query, 40),
+                debugVersion: "GRX_V2_7_CACHE_ANIMATIONS",
+                search: query,
                 category,
                 page,
                 pageSize,
@@ -861,7 +1047,12 @@ router.get("/search", async (req, res) => {
             });
         }
 
-        const cache = getOrCreateCache(query, category);
+        const safeCategory =
+            category === "Todos" || supportedCategories.includes(category)
+                ? category
+                : "Todos";
+
+        const cache = getOrCreateCache(query, safeCategory, forceRefresh);
 
         await ensureCacheHasPage(cache, page, pageSize);
 
@@ -873,14 +1064,13 @@ router.get("/search", async (req, res) => {
 
         const hasMore =
             !cache.exhausted ||
-            cache.items.length > page * pageSize ||
-            cache.items.length < MAX_CACHE_ITEMS_PER_KEY;
+            cache.items.length > page * pageSize;
 
         res.json({
             success: true,
-            debugVersion: "GRX_V2_CACHE_MARKETPLACE",
-            search: sanitizeText(query, 40),
-            category,
+            debugVersion: "GRX_V2_7_CACHE_MARKETPLACE",
+            search: query,
+            category: safeCategory,
             page,
             pageSize,
             count: results.length,
@@ -897,7 +1087,7 @@ router.get("/search", async (req, res) => {
 
         res.json({
             success: false,
-            debugVersion: "GRX_V2_CACHE_ERROR",
+            debugVersion: "GRX_V2_7_CACHE_ERROR",
             error: "No se pudo conectar al catálogo de Roblox",
             results: [],
             hasMore: true
