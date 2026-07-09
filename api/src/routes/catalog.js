@@ -1,4 +1,4 @@
-console.log("🔥 GRX CATALOG V2.8 CONJUNTOS ROBLOX 🔥", __filename);
+console.log("🔥 GRX CATALOG V2.9 AVATARES MARKETPLACE 🔥", __filename);
 
 const express = require("express");
 const axios = require("axios");
@@ -295,48 +295,183 @@ const categoryAssetTypeIds = {
     "Pantalón": [12, 66, 69, 72]
 };
 
+
 // =========================================================
-// CONJUNTOS / BUNDLES ROBLOX
+// CONJUNTOS / AVATARES DEL MARKETPLACE ROBLOX
+// Busca avatares reales como los de la pestaña "Avatares".
 // =========================================================
 
-const characterBundles = [
-    { bundleId: 238, name: "Man", price: "Gratis", creator: "Roblox", theme: "Clásico" },
-    { bundleId: 239, name: "Woman", price: "Gratis", creator: "Roblox", theme: "Clásico" },
-    { bundleId: 311, name: "Robloxian 2.0", price: 175, creator: "Roblox", theme: "Clásico" },
-    { bundleId: 337, name: "City Life Woman", price: "Gratis", creator: "Roblox", theme: "Ciudad" },
-    { bundleId: 589, name: "Junkbot", price: "Gratis", creator: "Roblox", theme: "Robot" },
-    { bundleId: 57, name: "Ten Million Robux Man", price: 5000, creator: "Roblox", theme: "Premium" },
-    { bundleId: 192, name: "Korblox Deathspeaker", price: 17000, creator: "Roblox", theme: "Korblox" }
+const ROBLOX_MARKETPLACE_URL = "https://catalog.roblox.com/v1/search/items/details";
+
+const avatarStarterKeywords = [
+    "emo",
+    "vkei",
+    "y2k",
+    "angel",
+    "dark",
+    "black",
+    "cute",
+    "mafioso",
+    "payaso",
+    "sushi",
+    "anime",
+    "goth",
+    "boy",
+    "girl",
+    "femboy",
+    "mask",
+    "streetwear",
+    "aesthetic"
 ];
 
-function normalizeBundle(bundle) {
+function isMarketplaceBundle(item) {
+    const itemType = String(item.itemType || item.itemTypeName || "").toLowerCase();
+    const assetType = String(item.assetType || item.assetTypeName || "").toLowerCase();
+
+    return (
+        itemType.includes("bundle") ||
+        assetType.includes("bundle") ||
+        item.itemType === 1 ||
+        item.itemType === "Bundle"
+    );
+}
+
+function normalizeMarketplaceAvatar(item) {
+    const id = item.id || item.itemId || item.bundleId;
+
     return {
-        id: bundle.bundleId,
-        bundleId: bundle.bundleId,
-        name: sanitizeText(bundle.name, 58),
-        price: bundle.price,
-        creator: sanitizeText(bundle.creator || "Roblox", 40),
+        id,
+        bundleId: id,
+        name: sanitizeText(item.name || item.itemName || "Avatar", 58),
+        price: item.price || item.lowestPrice || item.priceStatus || "Gratis",
+        creator: sanitizeText(
+            item.creatorName ||
+            item.creatorTargetName ||
+            item.creator?.name ||
+            "Roblox",
+            40
+        ),
         category: "Conjuntos",
         type: "Bundle",
-        theme: sanitizeText(bundle.theme || "Conjunto", 30),
-        thumbnail: `rbxthumb://type=BundleThumbnail&id=${bundle.bundleId}&w=150&h=150`
+        theme: "Avatar",
+        thumbnail: `rbxthumb://type=BundleThumbnail&id=${id}&w=150&h=150`
     };
 }
 
-async function getCharacterBundles(query) {
-    let bundles = characterBundles;
+function removeDuplicateAvatars(items) {
+    const seen = new Set();
+    const clean = [];
 
-    if (query && query.trim() !== "") {
-        const q = query.toLowerCase();
+    for (const item of items) {
+        if (!item || !item.id) continue;
 
-        bundles = bundles.filter(bundle =>
-            String(bundle.name || "").toLowerCase().includes(q) ||
-            String(bundle.theme || "").toLowerCase().includes(q) ||
-            String(bundle.creator || "").toLowerCase().includes(q)
-        );
+        const key = String(item.id);
+
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+        clean.push(item);
     }
 
-    return bundles.map(normalizeBundle);
+    return clean;
+}
+
+async function searchMarketplaceAvatars(keyword, limit = 30) {
+    const q = sanitizeQuery(keyword || "", 50);
+
+    const attempts = [
+        {
+            Keyword: q,
+            Category: 13,
+            Subcategory: 37,
+            SortType: 1,
+            SortAggregation: 5,
+            Limit: limit,
+            IncludeNotForSale: true
+        },
+        {
+            Keyword: q,
+            Category: 1,
+            Subcategory: 37,
+            SortType: 1,
+            SortAggregation: 5,
+            Limit: limit,
+            IncludeNotForSale: true
+        },
+        {
+            Keyword: q,
+            Category: 4,
+            SortType: 1,
+            SortAggregation: 5,
+            Limit: limit,
+            IncludeNotForSale: true
+        },
+        {
+            Keyword: q,
+            SortType: 1,
+            SortAggregation: 5,
+            Limit: limit,
+            IncludeNotForSale: true
+        }
+    ];
+
+    const found = [];
+
+    for (const params of attempts) {
+        try {
+            const response = await axios.get(ROBLOX_MARKETPLACE_URL, {
+                params,
+                timeout: 9000,
+                headers: {
+                    "User-Agent": "GRX-Catalog/1.0"
+                }
+            });
+
+            const data = response.data?.data || [];
+
+            for (const item of data) {
+                if (!isMarketplaceBundle(item)) continue;
+
+                const normalized = normalizeMarketplaceAvatar(item);
+
+                if (normalized.id) {
+                    found.push(normalized);
+                }
+            }
+
+            if (found.length >= limit) {
+                break;
+            }
+        } catch (error) {
+            console.log("Falló búsqueda de avatares:", q, error.message);
+        }
+    }
+
+    return removeDuplicateAvatars(found).slice(0, limit);
+}
+
+async function getCharacterBundles(query) {
+    const cleanQuery = sanitizeQuery(query || "", 50);
+
+    if (cleanQuery !== "") {
+        return await searchMarketplaceAvatars(cleanQuery, 60);
+    }
+
+    const all = [];
+
+    for (const keyword of avatarStarterKeywords) {
+        const results = await searchMarketplaceAvatars(keyword, 20);
+
+        for (const item of results) {
+            all.push(item);
+        }
+
+        if (all.length >= 80) {
+            break;
+        }
+    }
+
+    return removeDuplicateAvatars(all).slice(0, 80);
 }
 
 const animationBundles = [
@@ -1056,7 +1191,7 @@ async function warmUpCache() {
 router.get("/", (req, res) => {
     res.json({
         name: "GRX Catalog Route",
-        version: "2.8",
+        version: "2.9",
         status: "Online",
         route: "/catalog/search"
     });
@@ -1079,7 +1214,7 @@ router.get("/search", async (req, res) => {
 
             return res.json({
                 success: true,
-                debugVersion: "GRX_V2_8_CACHE_BUNDLES",
+                debugVersion: "GRX_V2_9_AVATARS_MARKETPLACE",
                 search: query,
                 category,
                 page,
@@ -1096,7 +1231,7 @@ router.get("/search", async (req, res) => {
 
             return res.json({
                 success: true,
-                debugVersion: "GRX_V2_8_CACHE_ANIMATIONS",
+                debugVersion: "GRX_V2_9_CACHE_ANIMATIONS",
                 search: query,
                 category,
                 page,
@@ -1129,7 +1264,7 @@ router.get("/search", async (req, res) => {
 
         res.json({
             success: true,
-            debugVersion: "GRX_V2_8_CACHE_MARKETPLACE",
+            debugVersion: "GRX_V2_9_CACHE_MARKETPLACE",
             search: query,
             category: safeCategory,
             page,
@@ -1148,7 +1283,7 @@ router.get("/search", async (req, res) => {
 
         res.json({
             success: false,
-            debugVersion: "GRX_V2_8_CACHE_ERROR",
+            debugVersion: "GRX_V2_9_CACHE_ERROR",
             error: "No se pudo conectar al catálogo de Roblox",
             results: [],
             hasMore: true
